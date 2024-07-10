@@ -74,17 +74,13 @@ def verify_token(token: str = None):
 
 
 @app.get("/", response_class=HTMLResponse)
-async def read_root(token: str = Depends(oauth2_scheme)):
+async def read_root():
     """
     Serve the README.md file as styled HTML.
-
-    Args:
-        token (str): Firebase token.
 
     Returns:
         HTMLResponse: Rendered HTML content of README.md.
     """
-    user_id = verify_token(token)
 
     # Define the path to the README.md file
     readme_path = os.path.join(os.path.dirname(__file__), "README.md")

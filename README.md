@@ -1,5 +1,10 @@
-## Overview
+# Requirements
 
+* Python 3.9
+* .env needs api key at least
+* .json needs firebase service account key
+
+## Overview
 This FastAPI application is designed to provide weather data services. It allows authenticated users to fetch, store, and retrieve weather data for specific locations. The API integrates with Firebase for user authentication and uses Redis for data storage. It fetches weather data from the OpenWeather API.
 
 ### Key Components
