@@ -65,3 +65,6 @@ This FastAPI application is designed to provide weather data services. It allows
 A user wants to keep track of the weather at a specific location over time. They can use the `/update_weather/` endpoint to periodically fetch and store the weather data. Later, they can use the `/weather_data/{lat}/{lon}` endpoint to retrieve all historical weather data or the `/forecast_data/{lat}/{lon}` endpoint to get the latest forecast.
 
 This API is useful for applications that need to provide weather information to authenticated users, such as weather tracking apps, travel planning tools, or personalized weather notifications.
+
+# Automated Setup
+For the automated setup and cleanup process see `README_AUTOMATION.md` on how to use the `deploy.sh` and `order66.sh` scripts.

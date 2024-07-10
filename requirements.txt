@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+markdown
+firebase-admin
+redis
+httpx
