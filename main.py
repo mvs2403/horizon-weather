@@ -155,10 +155,67 @@ async def get_forecast_data(lat: float, lon: float, token: str = Depends(oauth2_
     return {"error": "Data not found"}
 
 
+# @app.get("/", response_class=HTMLResponse)
+# async def read_root():
+#     readme_path = os.path.join(os.path.dirname(__file__), "README.md")
+#     with open(readme_path, "r", encoding="utf-8") as f:
+#         readme_content = f.read()
+#     html_content = markdown.markdown(readme_content)
+#     return HTMLResponse(content=html_content)
+
+
+css_styles = """
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        line-height: 1.6;
+        margin: 0;
+        padding: 20px;
+        background-color: #f5f5f5;
+    }
+    h1, h2, h3 {
+        color: #333;
+    }
+    p {
+        color: #666;
+    }
+    code {
+        background-color: #eee;
+        padding: 2px 4px;
+        border-radius: 4px;
+    }
+    pre {
+        background-color: #eee;
+        padding: 10px;
+        border-radius: 4px;
+        overflow-x: auto;
+    }
+    a {
+        color: #1e90ff;
+        text-decoration: none;
+    }
+    a:hover {
+        text-decoration: underline;
+    }
+</style>
+"""
+
+
 @app.get("/", response_class=HTMLResponse)
 async def read_root():
     readme_path = os.path.join(os.path.dirname(__file__), "README.md")
     with open(readme_path, "r", encoding="utf-8") as f:
         readme_content = f.read()
     html_content = markdown.markdown(readme_content)
-    return HTMLResponse(content=html_content)
+    full_html_content = f"""
+    <html>
+    <head>
+        <title>Horizon Weather</title>
+        {css_styles}
+    </head>
+    <body>
+        {html_content}
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=full_html_content)
