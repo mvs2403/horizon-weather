@@ -230,9 +230,9 @@ async def fetch_weather_data(lat: float, lon: float):
     """
     async with httpx.AsyncClient() as client:
         current_weather_response = await client.get(
-            f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={API_KEY}")
+            f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&units=metric&appid={API_KEY}")
         forecast_weather_response = await client.get(
-            f"https://api.openweathermap.org/data/2.5/forecast?lat={lat}&lon={lon}&appid={API_KEY}")
+            f"https://api.openweathermap.org/data/2.5/forecast?lat={lat}&lon={lon}&units=metric&appid={API_KEY}")
 
         current_weather_data = current_weather_response.json()
         forecast_weather_data = forecast_weather_response.json()
