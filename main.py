@@ -23,7 +23,13 @@ cred = credentials.Certificate("horizon-weather-firebase-admin.json")
 firebase_admin.initialize_app(cred)
 
 # Configure Redis
-r = redis.Redis(host='localhost', port=6379, db=0)
+try:
+    r = redis.Redis(host='localhost', port=6379, db=0)
+    # Test the Redis connection
+    r.ping()
+except redis.ConnectionError:
+    print("Error: Redis server is not running. Please start the Redis server.")
+    exit(1)
 
 # OAuth2 scheme for Firebase token
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
@@ -47,6 +53,7 @@ def verify_token(token: str):
         HTTPException: If token is invalid or expired.
     """
     if HOUDINI:
+        print("Houdini did it again!")
         return "houdini"
     try:
         decoded_token = auth.verify_id_token(token)
@@ -153,15 +160,6 @@ async def get_forecast_data(lat: float, lon: float, token: str = Depends(oauth2_
     if data:
         return json.loads(data)
     return {"error": "Data not found"}
-
-
-# @app.get("/", response_class=HTMLResponse)
-# async def read_root():
-#     readme_path = os.path.join(os.path.dirname(__file__), "README.md")
-#     with open(readme_path, "r", encoding="utf-8") as f:
-#         readme_content = f.read()
-#     html_content = markdown.markdown(readme_content)
-#     return HTMLResponse(content=html_content)
 
 
 css_styles = """
