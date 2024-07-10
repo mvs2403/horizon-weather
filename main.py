@@ -1,3 +1,4 @@
+import threading
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.security import OAuth2PasswordBearer
@@ -16,8 +17,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-API_KEY = os.getenv("OPENWEATHER_API_KEY")
-BYPASS_AUTH = os.getenv("BYPASS_AUTH") == "true"
+API_KEY = os.getenv("OPENWEATHERMAP_API_KEY")
+HOUDINI = os.getenv("HOUDINI") == "true"
 
 app = FastAPI()
 
@@ -59,8 +60,8 @@ def verify_token(token: str = None):
     Raises:
         HTTPException: If token is invalid or expired and not bypassing auth.
     """
-    if BYPASS_AUTH:
-        return "development_user"
+    if HOUDINI:
+        return "houdini"
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
     try:
@@ -135,7 +136,7 @@ async def read_root(token: str = Depends(oauth2_scheme)):
     full_html_content = f"""
     <html>
     <head>
-        <title>README</title>
+        <title>Horizon Weather</title>
         {css_styles}
     </head>
     <body>
@@ -254,6 +255,24 @@ async def save_weather_data(user_id: str, lat: float, lon: float):
     else:
         sqlite_cursor.execute("INSERT INTO weather_data (user_id, lat, lon, timestamp, data) VALUES (?, ?, ?, ?, ?)",
                               (user_id, lat, lon, timestamp, json.dumps(current_weather_data)))
-        sqlite_cursor.execute("INSERT INTO forecast_data (user_id, lat, lon, data) VALUES (?, ?, ?)",
+        sqlite_cursor.execute("INSERT INTO forecast_data (user_id, lat, lon, data) VALUES (?, ?, ?, ?)",
                               (user_id, lat, lon, json.dumps(forecast_weather_data)))
         sqlite_conn.commit()
+
+
+def janitor_bot():
+    """
+    JanitorBot: Cleans up old weather data from the SQLite database.
+
+    Deletes weather data older than 30 days to manage the database size.
+    """
+    while True:
+        cutoff_timestamp = int(time.time()) - 30 * 24 * 3600
+        sqlite_cursor.execute("DELETE FROM weather_data WHERE timestamp < ?", (cutoff_timestamp,))
+        sqlite_conn.commit()
+        time.sleep(24 * 3600)  # Run the cleanup process once a day
+
+
+# Start the JanitorBot cleanup thread
+cleanup_thread = threading.Thread(target=janitor_bot, daemon=True)
+cleanup_thread.start()
