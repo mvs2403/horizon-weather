@@ -11,6 +11,7 @@ import json
 import time
 import sqlite3
 import httpx
+from datetime import datetime
 
 # Load environment variables
 from dotenv import load_dotenv
@@ -158,11 +159,12 @@ async def update_weather(lat: float, lon: float, token: str = Depends(oauth2_sch
         token (str): Firebase token.
 
     Returns:
-        dict: Detail message indicating the weather data update status.
+        dict: Detail message indicating the weather data update status with a human-readable timestamp.
     """
     user_id = verify_token(token)
     await save_weather_data(user_id, lat, lon)
-    return {"detail": "Weather data updated"}
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    return {"detail": "Weather data updated", "timestamp": timestamp}
 
 
 @app.get("/weather_data/{lat}/{lon}")
