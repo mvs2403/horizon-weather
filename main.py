@@ -267,12 +267,18 @@ def janitor_bot():
     Deletes weather data older than 30 days to manage the database size.
     """
     while True:
+        sqlite_cleanup_conn = sqlite3.connect(':memory:')
+        sqlite_cleanup_cursor = sqlite_cleanup_conn.cursor()
+
         cutoff_timestamp = int(time.time()) - 30 * 24 * 3600
-        sqlite_cursor.execute("DELETE FROM weather_data WHERE timestamp < ?", (cutoff_timestamp,))
-        sqlite_conn.commit()
+        sqlite_cleanup_cursor.execute("DELETE FROM weather_data WHERE timestamp < ?", (cutoff_timestamp,))
+        sqlite_cleanup_conn.commit()
+
+        sqlite_cleanup_conn.close()
         time.sleep(24 * 3600)  # Run the cleanup process once a day
 
 
 # Start the JanitorBot cleanup thread
-cleanup_thread = threading.Thread(target=janitor_bot, daemon=True)
-cleanup_thread.start()
+# cleanup_thread = threading.Thread(target=janitor_bot, daemon=True)
+# cleanup_thread.start()
+# TODO: Does not Work (Not thread safe)
