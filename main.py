@@ -1,20 +1,23 @@
-import asyncio
-from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks
-from fastapi.security import OAuth2PasswordBearer
+from fastapi import FastAPI, Depends, HTTPException
 from fastapi.responses import HTMLResponse
+from fastapi.security import OAuth2PasswordBearer
 import markdown
-import redis
-import httpx
-import json
-import time
-from datetime import datetime, timedelta
+import os
 import firebase_admin
 from firebase_admin import credentials, auth
+import redis
+import json
+import time
+import sqlite3
+import httpx
 
-import os
+# Load environment variables
 from dotenv import load_dotenv
+
 load_dotenv()
+
 API_KEY = os.getenv("OPENWEATHER_API_KEY")
+BYPASS_AUTH = os.getenv("BYPASS_AUTH") == "true"
 
 app = FastAPI()
 
@@ -22,24 +25,28 @@ app = FastAPI()
 cred = credentials.Certificate("horizon-weather-firebase-admin.json")
 firebase_admin.initialize_app(cred)
 
-# Configure Redis
+# Attempt to configure Redis connection
+use_redis = True
 try:
     r = redis.Redis(host='localhost', port=6379, db=0)
-    # Test the Redis connection
     r.ping()
 except redis.ConnectionError:
-    print("Error: Redis server is not running. Please start the Redis server.")
-    exit(1)
+    use_redis = False
+
+# Configure SQLite as fallback
+sqlite_conn = sqlite3.connect(':memory:')
+sqlite_cursor = sqlite_conn.cursor()
+
+# Create tables for SQLite
+sqlite_cursor.execute(
+    '''CREATE TABLE IF NOT EXISTS weather_data (user_id TEXT, lat REAL, lon REAL, timestamp INTEGER, data TEXT)''')
+sqlite_cursor.execute('''CREATE TABLE IF NOT EXISTS forecast_data (user_id TEXT, lat REAL, lon REAL, data TEXT)''')
 
 # OAuth2 scheme for Firebase token
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 
-# Global houdini authentication
-HOUDINI = os.getenv("HOUDINI") == "true"
-
-
-def verify_token(token: str):
+def verify_token(token: str = None):
     """
     Verify the Firebase token to authenticate the user.
 
@@ -47,14 +54,15 @@ def verify_token(token: str):
         token (str): Firebase token.
 
     Returns:
-        str: User ID if token is valid.
+        str: User ID if token is valid, or dummy user ID if bypassing auth.
 
     Raises:
-        HTTPException: If token is invalid or expired.
+        HTTPException: If token is invalid or expired and not bypassing auth.
     """
-    if HOUDINI:
-        print("Houdini did it again!")
-        return "houdini"
+    if BYPASS_AUTH:
+        return "development_user"
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
     try:
         decoded_token = auth.verify_id_token(token)
         user_id = decoded_token['uid']
@@ -63,46 +71,79 @@ def verify_token(token: str):
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
 
-async def fetch_weather_data(lat: float, lon: float):
+@app.get("/", response_class=HTMLResponse)
+async def read_root(token: str = Depends(oauth2_scheme)):
     """
-    Fetch current and forecast weather data from OpenWeather API.
+    Serve the README.md file as styled HTML.
 
     Args:
-        lat (float): Latitude of the location.
-        lon (float): Longitude of the location.
+        token (str): Firebase token.
 
     Returns:
-        tuple: Current weather data and forecast weather data.
+        HTMLResponse: Rendered HTML content of README.md.
     """
-    async with httpx.AsyncClient() as client:
-        current_weather_response = await client.get(
-            f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={API_KEY}")
-        forecast_weather_response = await client.get(
-            f"https://api.openweathermap.org/data/2.5/forecast?lat={lat}&lon={lon}&appid={API_KEY}")
+    user_id = verify_token(token)
 
-        current_weather_data = current_weather_response.json()
-        forecast_weather_data = forecast_weather_response.json()
-        return current_weather_data, forecast_weather_data
+    # Define the path to the README.md file
+    readme_path = os.path.join(os.path.dirname(__file__), "README.md")
 
+    # Read the contents of the README.md file
+    with open(readme_path, "r", encoding="utf-8") as f:
+        readme_content = f.read()
 
-async def save_weather_data(user_id: str, lat: float, lon: float):
+    # Convert the Markdown content to HTML
+    html_content = markdown.markdown(readme_content)
+
+    # Define your CSS styles
+    css_styles = """
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1, h2, h3 {
+            color: #333;
+        }
+        p {
+            color: #666;
+        }
+        code {
+            background-color: #eee;
+            padding: 2px 4px;
+            border-radius: 4px;
+        }
+        pre {
+            background-color: #eee;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        a {
+            color: #1e90ff;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+    </style>
     """
-    Save current and forecast weather data to Redis.
 
-    Args:
-        user_id (str): User ID.
-        lat (float): Latitude of the location.
-        lon (float): Longitude of the location.
+    # Inject the CSS styles into the HTML content
+    full_html_content = f"""
+    <html>
+    <head>
+        <title>README</title>
+        {css_styles}
+    </head>
+    <body>
+        {html_content}
+    </body>
+    </html>
     """
-    current_weather_data, forecast_weather_data = await fetch_weather_data(lat, lon)
-    timestamp = int(time.time())
-
-    # Save current weather data to history
-    await r.set(f"{user_id}:weather_data:{lat}:{lon}:{timestamp}", json.dumps(current_weather_data))
-    # Set expiry to 30 days
-    await r.expireat(f"{user_id}:weather_data:{lat}:{lon}:{timestamp}", timestamp + 30 * 24 * 3600)
-    # Save forecast weather data
-    await r.set(f"{user_id}:forecast_data:{lat}:{lon}", json.dumps(forecast_weather_data))
+    return HTMLResponse(content=full_html_content)
 
 
 @app.post("/update_weather/")
@@ -137,8 +178,13 @@ async def get_all_weather_data(lat: float, lon: float, token: str = Depends(oaut
         list: List of all historical weather data for the specified location.
     """
     user_id = verify_token(token)
-    keys = r.keys(f"{user_id}:weather_data:{lat}:{lon}:*")
-    data = [json.loads(r.get(key)) for key in keys]
+    if use_redis:
+        keys = r.keys(f"{user_id}:weather_data:{lat}:{lon}:*")
+        data = [json.loads(r.get(key)) for key in keys]
+    else:
+        sqlite_cursor.execute("SELECT data FROM weather_data WHERE user_id=? AND lat=? AND lon=?", (user_id, lat, lon))
+        rows = sqlite_cursor.fetchall()
+        data = [json.loads(row[0]) for row in rows]
     return data
 
 
@@ -156,64 +202,58 @@ async def get_forecast_data(lat: float, lon: float, token: str = Depends(oauth2_
         dict: Forecast weather data or error message if data is not found.
     """
     user_id = verify_token(token)
-    data = r.get(f"{user_id}:forecast_data:{lat}:{lon}")
-    if data:
-        return json.loads(data)
+    if use_redis:
+        data = r.get(f"{user_id}:forecast_data:{lat}:{lon}")
+        if data:
+            return json.loads(data)
+    else:
+        sqlite_cursor.execute("SELECT data FROM forecast_data WHERE user_id=? AND lat=? AND lon=?", (user_id, lat, lon))
+        row = sqlite_cursor.fetchone()
+        if row:
+            return json.loads(row[0])
     return {"error": "Data not found"}
 
 
-css_styles = """
-<style>
-    body {
-        font-family: Arial, sans-serif;
-        line-height: 1.6;
-        margin: 0;
-        padding: 20px;
-        background-color: #f5f5f5;
-    }
-    h1, h2, h3 {
-        color: #333;
-    }
-    p {
-        color: #666;
-    }
-    code {
-        background-color: #eee;
-        padding: 2px 4px;
-        border-radius: 4px;
-    }
-    pre {
-        background-color: #eee;
-        padding: 10px;
-        border-radius: 4px;
-        overflow-x: auto;
-    }
-    a {
-        color: #1e90ff;
-        text-decoration: none;
-    }
-    a:hover {
-        text-decoration: underline;
-    }
-</style>
-"""
-
-
-@app.get("/", response_class=HTMLResponse)
-async def read_root():
-    readme_path = os.path.join(os.path.dirname(__file__), "README.md")
-    with open(readme_path, "r", encoding="utf-8") as f:
-        readme_content = f.read()
-    html_content = markdown.markdown(readme_content)
-    full_html_content = f"""
-    <html>
-    <head>
-        <title>Horizon Weather</title>
-        {css_styles}
-    </head>
-    <body>
-        {html_content}
-    </body>
-    </html>
+async def fetch_weather_data(lat: float, lon: float):
     """
-    return HTMLResponse(content=full_html_content)
+    Fetch current and forecast weather data from OpenWeather API.
+
+    Args:
+        lat (float): Latitude of the location.
+        lon (float): Longitude of the location.
+
+    Returns:
+        tuple: Current weather data and forecast weather data.
+    """
+    async with httpx.AsyncClient() as client:
+        current_weather_response = await client.get(
+            f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={API_KEY}")
+        forecast_weather_response = await client.get(
+            f"https://api.openweathermap.org/data/2.5/forecast?lat={lat}&lon={lon}&appid={API_KEY}")
+
+        current_weather_data = current_weather_response.json()
+        forecast_weather_data = forecast_weather_response.json()
+        return current_weather_data, forecast_weather_data
+
+
+async def save_weather_data(user_id: str, lat: float, lon: float):
+    """
+    Save current and forecast weather data to Redis or SQLite.
+
+    Args:
+        user_id (str): User ID.
+        lat (float): Latitude of the location.
+        lon (float): Longitude of the location.
+    """
+    current_weather_data, forecast_weather_data = await fetch_weather_data(lat, lon)
+    timestamp = int(time.time())
+    if use_redis:
+        await r.set(f"{user_id}:weather_data:{lat}:{lon}:{timestamp}", json.dumps(current_weather_data))
+        await r.expireat(f"{user_id}:weather_data:{lat}:{lon}:{timestamp}", timestamp + 30 * 24 * 3600)
+        await r.set(f"{user_id}:forecast_data:{lat}:{lon}", json.dumps(forecast_weather_data))
+    else:
+        sqlite_cursor.execute("INSERT INTO weather_data (user_id, lat, lon, timestamp, data) VALUES (?, ?, ?, ?, ?)",
+                              (user_id, lat, lon, timestamp, json.dumps(current_weather_data)))
+        sqlite_cursor.execute("INSERT INTO forecast_data (user_id, lat, lon, data) VALUES (?, ?, ?)",
+                              (user_id, lat, lon, json.dumps(forecast_weather_data)))
+        sqlite_conn.commit()
