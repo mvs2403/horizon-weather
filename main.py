@@ -1,6 +1,8 @@
 import asyncio
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks
 from fastapi.security import OAuth2PasswordBearer
+from fastapi.responses import HTMLResponse
+import markdown
 import redis
 import httpx
 import json
@@ -151,3 +153,12 @@ async def get_forecast_data(lat: float, lon: float, token: str = Depends(oauth2_
     if data:
         return json.loads(data)
     return {"error": "Data not found"}
+
+
+@app.get("/", response_class=HTMLResponse)
+async def read_root():
+    readme_path = os.path.join(os.path.dirname(__file__), "README.md")
+    with open(readme_path, "r", encoding="utf-8") as f:
+        readme_content = f.read()
+    html_content = markdown.markdown(readme_content)
+    return HTMLResponse(content=html_content)
