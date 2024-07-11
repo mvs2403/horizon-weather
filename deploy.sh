@@ -33,17 +33,11 @@ install_terraform() {
     fi
 }
 
-# Function to enable Google Cloud APIs
-enable_google_apis() {
-    gcloud services enable run.googleapis.com || exit 1
-    gcloud services enable cloudbuild.googleapis.com || exit 1
-    gcloud services enable containerregistry.googleapis.com || exit 1
-}
 
 # Function to check if billing is enabled
 check_billing_enabled() {
     PROJECT_ID=$1
-    if ! gcloud beta billing projects describe $PROJECT_ID | grep -q "billingEnabled: true"; then
+    if ! gcloud beta billing projects describe "$PROJECT_ID" | grep -q "billingEnabled: true"; then
         echo "Billing is not enabled for project $PROJECT_ID. Please enable billing and try again."
         exit 1
     fi
@@ -80,10 +74,9 @@ deploy_pi() {
 deploy_gcr() {
     PROJECT_ID=$1
     REGION=$2
-    check_billing_enabled $PROJECT_ID
-    enable_google_apis
+    check_billing_enabled "$PROJECT_ID"
     cd google_cloud
-    ./deploy_gcr.sh $PROJECT_ID $REGION
+    ./deploy_gcr.sh "$PROJECT_ID" "$REGION"
     cd ..
 }
 
@@ -93,7 +86,7 @@ deploy_aws() {
     REGION=$2
     ensure_docker_running
     cd aws
-    ./deploy_aws.sh $PROJECT_ID $REGION
+    ./deploy_aws.sh "$PROJECT_ID" "$REGION"
     cd ..
 }
 
@@ -111,13 +104,13 @@ elif [ "$1" == "gcr" ]; then
         echo "Usage: $0 gcr <project_id> <region>"
         exit 1
     fi
-    deploy_gcr $2 $3
+    deploy_gcr "$2" "$3"
 elif [ "$1" == "aws" ]; then
     if [ -z "$2" ] || [ -z "$3" ]; then
         echo "Usage: $0 aws <project_id> <region>"
         exit 1
     fi
-    deploy_aws $2 $3
+    deploy_aws "$2" "$3"
 else
     echo "Usage: $0 {pi|gcr|aws} [project_id] [region]"
     exit 1

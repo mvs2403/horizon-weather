@@ -3,8 +3,20 @@ provider "google" {
   region  = var.region
 }
 
+resource "google_project_service" "run" {
+  service = "run.googleapis.com"
+}
+
+resource "google_project_service" "cloudbuild" {
+  service = "cloudbuild.googleapis.com"
+}
+
+resource "google_project_service" "containerregistry" {
+  service = "containerregistry.googleapis.com"
+}
+
 resource "google_cloud_run_service" "default" {
-  name     = var.service_name
+  name     = "fastapi-service"
   location = var.region
 
   template {
@@ -36,25 +48,6 @@ resource "google_cloud_run_service_iam_member" "noauth" {
   member   = "allUsers"
 }
 
-variable "project_id" {
-  description = "The GCP project ID"
-  type        = string
-}
-
-variable "region" {
-  description = "The GCP region"
-  type        = string
-  default     = "us-central1"
-}
-
-variable "service_name" {
-  description = "The Cloud Run service name"
-  type        = string
-  default     = "fastapi-service"
-}
-
-variable "memory" {
-  description = "The memory limit for the Cloud Run container"
-  type        = string
-  default     = "1Gi"
+output "cloud_run_url" {
+  value = google_cloud_run_service.default.status[0].url
 }

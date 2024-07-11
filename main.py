@@ -8,6 +8,7 @@ import firebase_admin
 from firebase_admin import credentials, auth
 import redis
 import json
+import uvicorn
 import time
 import sqlite3
 import httpx
@@ -281,7 +282,6 @@ def janitor_bot():
 # cleanup_thread.start()
 # TODO: Does not Work (Not thread safe)
 
-# if __name__ == "__main__":
-#     import uvicorn
-#     port = int(os.environ.get("PORT", 8000))
-#     uvicorn.run(app, host="0.0.0.0", port=port)
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)

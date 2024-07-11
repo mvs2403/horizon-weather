@@ -1,4 +1,4 @@
-FROM python:3.9-slim
+FROM tiangolo/uvicorn-gunicorn-fastapi:python3.9
 
 COPY main.py /app/main.py
 COPY .env /app/.env
@@ -15,4 +15,4 @@ EXPOSE 8000
 ENV PORT 8000
 ENV HOST 0.0.0.0
 
-CMD exec uvicorn main:app --host 0.0.0.0 --port ${PORT} 
+CMD exec uvicorn main:app --host ${HOST} --port ${PORT}
