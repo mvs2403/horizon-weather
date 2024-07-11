@@ -12,7 +12,7 @@ import uvicorn
 import time
 import sqlite3
 import httpx
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 # Load environment variables
 from dotenv import load_dotenv
@@ -50,7 +50,7 @@ sqlite_cursor = sqlite_conn.cursor()
 
 # Create tables for SQLite
 sqlite_cursor.execute(
-    '''CREATE TABLE IF NOT EXISTS weather_data (user_id TEXT, lat REAL, lon REAL, timestamp INTEGER, data TEXT)''')
+    '''CREATE TABLE IF NOT EXISTS weather_data (user_id TEXT, lat REAL, lon REAL, timestamp TEXT, data TEXT)''')
 sqlite_cursor.execute('''CREATE TABLE IF NOT EXISTS forecast_data (user_id TEXT, lat REAL, lon REAL, data TEXT)''')
 
 # OAuth2 scheme for Firebase token
@@ -244,6 +244,21 @@ async def fetch_weather_data(lat: float, lon: float):
         return current_weather_data, forecast_weather_data
 
 
+def unix_to_datetime(unix_time, tz_offset):
+    """
+    Convert Unix timestamp to human-readable datetime string with timezone adjustment.
+
+    Args:
+        unix_time (int): Unix timestamp.
+        tz_offset (int): Timezone offset in seconds.
+
+    Returns:
+        str: Human-readable datetime string.
+    """
+    tz = timezone(timedelta(seconds=tz_offset))
+    return datetime.fromtimestamp(unix_time, tz).strftime('%Y-%m-%d %H:%M:%S')
+
+
 async def save_weather_data(user_id: str, lat: float, lon: float):
     """
     Save current and forecast weather data to Redis or SQLite.
@@ -254,6 +269,13 @@ async def save_weather_data(user_id: str, lat: float, lon: float):
         lon (float): Longitude of the location.
     """
     current_weather_data, forecast_weather_data = await fetch_weather_data(lat, lon)
+
+    # Convert Unix timestamps to human-readable datetime with timezone adjustment
+    tz_offset = current_weather_data["timezone"]
+    current_weather_data["dt"] = unix_to_datetime(current_weather_data["dt"], tz_offset)
+    current_weather_data["sys"]["sunrise"] = unix_to_datetime(current_weather_data["sys"]["sunrise"], tz_offset)
+    current_weather_data["sys"]["sunset"] = unix_to_datetime(current_weather_data["sys"]["sunset"], tz_offset)
+
     timestamp = int(time.time())
     if use_redis:
         await r.set(f"{user_id}:weather_data:{lat}:{lon}:{timestamp}", json.dumps(current_weather_data))
