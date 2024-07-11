@@ -4,3 +4,5 @@ markdown
 firebase-admin
 redis
 httpx
+pydantic
+python-dotenv

@@ -13,6 +13,8 @@ import time
 import sqlite3
 import httpx
 from datetime import datetime, timezone, timedelta
+from pydantic import BaseModel
+from typing import List, Optional
 
 # Load environment variables
 from dotenv import load_dotenv
@@ -30,7 +32,15 @@ firebase_cert_path = "horizon-weather-firebase-admin.json"
 if not os.path.exists(firebase_cert_path):
     raise SystemExit(f"Missing Firebase credentials file: {firebase_cert_path}")
 
-app = FastAPI()
+app = FastAPI(
+    title="Horizon Weather API",
+    description="API for managing weather data with Firebase authentication.",
+    version="1.0.0",
+    contact={
+        "name": "Marco van Staden",
+        "email": "mvs2403@gmail.com",
+    },
+)
 
 # Initialize Firebase Admin SDK
 cred = credentials.Certificate(firebase_cert_path)
@@ -82,7 +92,7 @@ def verify_token(token: str = None):
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
 
-@app.get("/", response_class=HTMLResponse)
+@app.get("/", response_class=HTMLResponse, summary="Read Root", description="Serve the README.md file as styled HTML.")
 async def read_root():
     """
     Serve the README.md file as styled HTML.
@@ -153,7 +163,161 @@ async def read_root():
     return HTMLResponse(content=full_html_content)
 
 
-@app.post("/update_weather/")
+class WeatherUpdateResponse(BaseModel):
+    detail: str
+    timestamp: str
+
+
+class Coord(BaseModel):
+    lon: float
+    lat: float
+
+
+class Weather(BaseModel):
+    id: int
+    main: str
+    description: str
+    icon: str
+
+
+class Main(BaseModel):
+    temp: float
+    feels_like: float
+    temp_min: float
+    temp_max: float
+    pressure: int
+    humidity: int
+    sea_level: Optional[int]
+    grnd_level: Optional[int]
+
+
+class Wind(BaseModel):
+    speed: float
+    deg: int
+    gust: Optional[float]
+
+
+class Clouds(BaseModel):
+    all: int
+
+
+class Sys(BaseModel):
+    type: Optional[int]
+    id: Optional[int]
+    country: Optional[str]
+    sunrise: Optional[str]
+    sunset: Optional[str]
+
+
+class WeatherDataResponse(BaseModel):
+    coord: Coord
+    weather: List[Weather]
+    base: Optional[str]
+    main: Main
+    visibility: Optional[int]
+    wind: Wind
+    clouds: Clouds
+    dt: str
+    sys: Sys
+    timezone: Optional[int]
+    id: Optional[int]
+    name: Optional[str]
+    cod: Optional[int]
+
+
+class ForecastMain(BaseModel):
+    temp: float
+    feels_like: float
+    temp_min: float
+    temp_max: float
+    pressure: int
+    sea_level: int
+    grnd_level: int
+    humidity: int
+    temp_kf: float
+
+
+class ForecastWeather(BaseModel):
+    id: int
+    main: str
+    description: str
+    icon: str
+
+
+class ForecastClouds(BaseModel):
+    all: int
+
+
+class ForecastWind(BaseModel):
+    speed: float
+    deg: int
+    gust: float
+
+
+class ForecastSys(BaseModel):
+    pod: str
+
+
+class ForecastListItem(BaseModel):
+    dt: int
+    main: ForecastMain
+    weather: List[ForecastWeather]
+    clouds: ForecastClouds
+    wind: ForecastWind
+    visibility: int
+    pop: float
+    sys: ForecastSys
+    dt_txt: str
+
+
+class City(BaseModel):
+    id: int
+    name: str
+    coord: Coord
+    country: str
+    population: int
+    timezone: int
+    sunrise: int
+    sunset: int
+
+
+class ForecastDataResponse(BaseModel):
+    cod: str
+    message: int
+    cnt: int
+    list: List[ForecastListItem]
+    city: City
+
+
+@app.post(
+    "/update_weather/",
+    summary="Update Weather Data",
+    description="Update the weather data for a specific location.",
+    response_model=WeatherUpdateResponse,
+    responses={
+        200: {
+            "description": "Weather data updated successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Weather data updated",
+                        "timestamp": "2024-07-11 14:23:00"
+                    }
+                }
+            }
+        },
+        401: {
+            "description": "Invalid or expired token",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Invalid or expired token"
+                    }
+                }
+            }
+        }
+    }
+)
 async def update_weather(lat: float, lon: float, token: str = Depends(oauth2_scheme)):
     """
     Update the weather data for a specific location.
@@ -172,7 +336,125 @@ async def update_weather(lat: float, lon: float, token: str = Depends(oauth2_sch
     return {"detail": "Weather data updated", "timestamp": timestamp}
 
 
-@app.get("/weather_data/{lat}/{lon}")
+@app.get(
+    "/weather_data/{lat}/{lon}",
+    summary="Current Weather and Historical Weather",
+    description="Get up to the last 30 days and the current weather for a specific location.",
+    response_model=list[WeatherDataResponse],
+    responses={
+        200: {
+            "description": "Successful response",
+            "content": {
+                "application/json": {
+                    "example": [
+                        {
+                            "coord": {
+                                "lon": 27.9769,
+                                "lat": -26.1404
+                            },
+                            "weather": [
+                                {
+                                    "id": 800,
+                                    "main": "Clear",
+                                    "description": "clear sky",
+                                    "icon": "01d"
+                                }
+                            ],
+                            "base": "stations",
+                            "main": {
+                                "temp": 21.96,
+                                "feels_like": 20.68,
+                                "temp_min": 20.9,
+                                "temp_max": 22.28,
+                                "pressure": 1018,
+                                "humidity": 18,
+                                "sea_level": 1018,
+                                "grnd_level": 840
+                            },
+                            "visibility": 10000,
+                            "wind": {
+                                "speed": 0.89,
+                                "deg": 307,
+                                "gust": 4.47
+                            },
+                            "clouds": {
+                                "all": 0
+                            },
+                            "dt": "2024-07-11 14:44:12",
+                            "sys": {
+                                "type": 2,
+                                "id": 2008899,
+                                "country": "ZA",
+                                "sunrise": "2024-07-11 06:55:14",
+                                "sunset": "2024-07-11 17:31:36"
+                            },
+                            "timezone": 7200,
+                            "id": 7870410,
+                            "name": "Albertskroon",
+                            "cod": 200
+                        },
+                        {
+                            "coord": {
+                                "lon": 27.9769,
+                                "lat": -26.1404
+                            },
+                            "weather": [
+                                {
+                                    "id": 800,
+                                    "main": "Clear",
+                                    "description": "clear sky",
+                                    "icon": "01d"
+                                }
+                            ],
+                            "base": "stations",
+                            "main": {
+                                "temp": 21.96,
+                                "feels_like": 20.68,
+                                "temp_min": 20.9,
+                                "temp_max": 22.28,
+                                "pressure": 1018,
+                                "humidity": 18,
+                                "sea_level": 1018,
+                                "grnd_level": 840
+                            },
+                            "visibility": 10000,
+                            "wind": {
+                                "speed": 0.89,
+                                "deg": 307,
+                                "gust": 4.47
+                            },
+                            "clouds": {
+                                "all": 0
+                            },
+                            "dt": "2024-07-11 14:44:14",
+                            "sys": {
+                                "type": 2,
+                                "id": 2008899,
+                                "country": "ZA",
+                                "sunrise": "2024-07-11 06:55:14",
+                                "sunset": "2024-07-11 17:31:36"
+                            },
+                            "timezone": 7200,
+                            "id": 7870410,
+                            "name": "Albertskroon",
+                            "cod": 200
+                        }
+                    ]
+                }
+            }
+        },
+        401: {
+            "description": "Invalid or expired token",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Invalid or expired token"
+                    }
+                }
+            }
+        }
+    }
+)
 async def get_all_weather_data(lat: float, lon: float, token: str = Depends(oauth2_scheme)):
     """
     Get all historical weather data for a specific location.
@@ -196,7 +478,125 @@ async def get_all_weather_data(lat: float, lon: float, token: str = Depends(oaut
     return data
 
 
-@app.get("/forecast_data/{lat}/{lon}")
+@app.get(
+    "/forecast_data/{lat}/{lon}",
+    summary="Forecast Weather Data",
+    description="Get forecast weather data for a specific location.",
+    response_model=list[ForecastDataResponse],
+    responses={
+        200: {
+            "description": "Successful response",
+            "content": {
+                "application/json": {
+                    "example": [
+                        {
+                            "cod": "200",
+                            "message": 0,
+                            "cnt": 40,
+                            "list": [
+                                {
+                                    "dt": 1720710000,
+                                    "main": {
+                                        "temp": 20.4,
+                                        "feels_like": 18.86,
+                                        "temp_min": 17.27,
+                                        "temp_max": 20.4,
+                                        "pressure": 1017,
+                                        "sea_level": 1017,
+                                        "grnd_level": 840,
+                                        "humidity": 14,
+                                        "temp_kf": 3.13
+                                    },
+                                    "weather": [
+                                        {
+                                            "id": 800,
+                                            "main": "Clear",
+                                            "description": "clear sky",
+                                            "icon": "01d"
+                                        }
+                                    ],
+                                    "clouds": {
+                                        "all": 0
+                                    },
+                                    "wind": {
+                                        "speed": 3.63,
+                                        "deg": 322,
+                                        "gust": 6.39
+                                    },
+                                    "visibility": 10000,
+                                    "pop": 0,
+                                    "sys": {
+                                        "pod": "d"
+                                    },
+                                    "dt_txt": "2024-07-11 15:00:00"
+                                },
+                                {
+                                    "dt": 1720720800,
+                                    "main": {
+                                        "temp": 16.15,
+                                        "feels_like": 14.13,
+                                        "temp_min": 13.25,
+                                        "temp_max": 16.15,
+                                        "pressure": 1020,
+                                        "sea_level": 1020,
+                                        "grnd_level": 839,
+                                        "humidity": 12,
+                                        "temp_kf": 2.9
+                                    },
+                                    "weather": [
+                                        {
+                                            "id": 800,
+                                            "main": "Clear",
+                                            "description": "clear sky",
+                                            "icon": "01n"
+                                        }
+                                    ],
+                                    "clouds": {
+                                        "all": 0
+                                    },
+                                    "wind": {
+                                        "speed": 1.58,
+                                        "deg": 307,
+                                        "gust": 1.9
+                                    },
+                                    "visibility": 10000,
+                                    "pop": 0,
+                                    "sys": {
+                                        "pod": "n"
+                                    },
+                                    "dt_txt": "2024-07-11 18:00:00"
+                                }
+                            ],
+                            "city": {
+                                "id": 7870410,
+                                "name": "Albertskroon",
+                                "coord": {
+                                    "lat": -26.1404,
+                                    "lon": 27.9769
+                                },
+                                "country": "ZA",
+                                "population": 0,
+                                "timezone": 7200,
+                                "sunrise": 1720673714,
+                                "sunset": 1720711896
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        401: {
+            "description": "Invalid or expired token",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Invalid or expired token"
+                    }
+                }
+            }
+        }
+    }
+)
 async def get_forecast_data(lat: float, lon: float, token: str = Depends(oauth2_scheme)):
     """
     Get forecast weather data for a specific location.
@@ -207,7 +607,7 @@ async def get_forecast_data(lat: float, lon: float, token: str = Depends(oauth2_
         token (str): Firebase token.
 
     Returns:
-        dict: Forecast weather data or error message if data is not found.
+        list: Forecast weather data for the specified location.
     """
     user_id = verify_token(token)
     if use_redis:
@@ -216,10 +616,9 @@ async def get_forecast_data(lat: float, lon: float, token: str = Depends(oauth2_
             return json.loads(data)
     else:
         sqlite_cursor.execute("SELECT data FROM forecast_data WHERE user_id=? AND lat=? AND lon=?", (user_id, lat, lon))
-        row = sqlite_cursor.fetchone()
-        if row:
-            return json.loads(row[0])
-    return {"error": "Data not found"}
+        rows = sqlite_cursor.fetchall()
+        data = [json.loads(row[0]) for row in rows]
+    return data
 
 
 async def fetch_weather_data(lat: float, lon: float):
@@ -313,5 +712,5 @@ def janitor_bot():
 # TODO: Does not Work (Not thread safe)
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8000))
+    port = int(os.environ.get("PORT", 8080))
     uvicorn.run(app, host="0.0.0.0", port=port)
