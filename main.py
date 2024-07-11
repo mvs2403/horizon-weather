@@ -22,10 +22,18 @@ load_dotenv()
 API_KEY = os.getenv("OPENWEATHERMAP_API_KEY")
 HOUDINI = os.getenv("HOUDINI") == "true"
 
+# Check for required environment variables and files
+if not API_KEY:
+    raise SystemExit("Missing OPENWEATHERMAP_API_KEY in .env file.")
+
+firebase_cert_path = "horizon-weather-firebase-admin.json"
+if not os.path.exists(firebase_cert_path):
+    raise SystemExit(f"Missing Firebase credentials file: {firebase_cert_path}")
+
 app = FastAPI()
 
 # Initialize Firebase Admin SDK
-cred = credentials.Certificate("horizon-weather-firebase-admin.json")
+cred = credentials.Certificate(firebase_cert_path)
 firebase_admin.initialize_app(cred)
 
 # Attempt to configure Redis connection
