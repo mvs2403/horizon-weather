@@ -1,7 +1,8 @@
 import threading
 from fastapi import FastAPI, Depends, HTTPException
+from fastapi.openapi.models import SecuritySchemeType
 from fastapi.responses import HTMLResponse
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import OAuth2PasswordBearer, HTTPBasic
 import markdown
 import os
 import firebase_admin
@@ -710,6 +711,32 @@ def janitor_bot():
 # cleanup_thread = threading.Thread(target=janitor_bot, daemon=True)
 # cleanup_thread.start()
 # TODO: Does not Work (Not thread safe)
+
+# Define OpenAPI schema with Bearer authentication
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    openapi_schema = app._original_openapi()
+    openapi_schema["components"]["securitySchemes"] = {
+        "BearerAuth": {
+            "type": "http",  # Use string directly instead of SecuritySchemeType.http
+            "scheme": "bearer",
+            "bearerFormat": "JWT",
+        }
+    }
+    routes_with_auth = ["/update_weather/", "/weather_data/{lat}/{lon}", "/forecast_data/{lat}/{lon}"]
+    for route in routes_with_auth:
+        if route in openapi_schema["paths"]:
+            for method in openapi_schema["paths"][route]:
+                openapi_schema["paths"][route][method]["security"] = [{"BearerAuth": []}]
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+# Store the original app.openapi method
+app._original_openapi = app.openapi
+
+# Override the app.openapi method with the custom one
+app.openapi = custom_openapi
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
