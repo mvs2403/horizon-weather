@@ -9,4 +9,4 @@ terraform init
 terraform destroy -var="project_id=$PROJECT_ID" -var="region=$REGION" -auto-approve
 
 # Remove Docker images from Google Container Registry
-gcloud container images delete gcr.io/$PROJECT_ID/fastapi-app --force-delete-tags
+gcloud container images delete gcr.io/"$PROJECT_ID"/fastapi-app --force-delete-tags
