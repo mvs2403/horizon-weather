@@ -3,6 +3,7 @@ from fastapi import FastAPI, Depends, HTTPException
 from fastapi.openapi.models import SecuritySchemeType
 from fastapi.responses import HTMLResponse
 from fastapi.security import OAuth2PasswordBearer, HTTPBasic
+from fastapi.middleware.cors import CORSMiddleware
 import markdown
 import os
 import firebase_admin
@@ -66,6 +67,22 @@ sqlite_cursor.execute('''CREATE TABLE IF NOT EXISTS forecast_data (user_id TEXT,
 
 # OAuth2 scheme for Firebase token
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+# Add CORS middleware
+origins = [
+    # "http://localhost",
+    # "http://localhost:8000",
+    "https://horizon-weather.web.app"
+    ""
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 def verify_token(token: str = None):
