@@ -24,7 +24,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 API_KEY = os.getenv("OPENWEATHERMAP_API_KEY")
-HOUDINI = os.getenv("HOUDINI") == "false"
+HOUDINI = os.getenv("HOUDINI") == "true"
 
 # Check for required environment variables and files
 if not API_KEY:
